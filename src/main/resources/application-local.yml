@@ -1,0 +1,33 @@
+spring:
+  ai:
+    bedrock:
+      anthropic:
+        chat:
+          enabled: false  # Disable Bedrock in local mode, use MockClassificationService instead
+
+aws:
+  region: us-east-1
+  access-key-id: test  # Dummy credentials for LocalStack
+  secret-access-key: test  # Dummy credentials for LocalStack
+  dynamodb:
+    endpoint: http://localhost:4566  # LocalStack
+  sqs:
+    endpoint: http://localhost:4566  # LocalStack
+    ingestion-queue-url: http://sqs.eu-central-1.localhost.localstack.cloud:4566/000000000000/defect-ticket-ingestion  # LocalStack queue URL
+    polling-enabled: true  # Enable SQS polling for local testing
+  stepfunctions:
+    endpoint: http://localhost:4566  # LocalStack
+    state-machine-arn: arn:aws:states:us-east-1:000000000000:stateMachine:TicketWorkflow  # LocalStack ARN
+    skip-execution: true  # Skip Step Functions execution in local mode (state machine not deployed)
+  secrets:
+    endpoint: http://localhost:4566  # LocalStack
+
+hitl:
+  approval:
+    skip-workflow-callback: true  # Skip Step Functions callback in local mode for testing with dummy task tokens
+
+logging:
+  level:
+    com.client.defectticket: DEBUG
+    software.amazon.awssdk: DEBUG
+    org.springframework.ai: DEBUG

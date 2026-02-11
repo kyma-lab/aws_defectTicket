@@ -1,0 +1,21 @@
+spring:
+  ai:
+    bedrock:
+      anthropic:
+        chat:
+          enabled: false  # Disable Bedrock in test mode, use MockClassificationService instead
+
+aws:
+  region: us-east-1
+  dynamodb:
+    endpoint: http://localhost:8000  # Testcontainers DynamoDB
+
+llm:
+  provider: mock  # Use mock LLM for tests
+  confidence-threshold: 0.85
+
+logging:
+  level:
+    com.client.defectticket: INFO
+    software.amazon.awssdk: WARN
+    org.springframework.ai: WARN

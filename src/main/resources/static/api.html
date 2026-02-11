@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Defect Ticket API Tester</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            font-size: 0.95rem;
+            opacity: 0.95;
+        }
+
+        .config-section {
+            background: #f8f9fa;
+            padding: 20px 30px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .config-section label {
+            font-weight: 600;
+            color: #495057;
+            margin-right: 10px;
+        }
+
+        .config-section input {
+            padding: 8px 15px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            width: 400px;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            padding: 30px;
+        }
+
+        .endpoint-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid #dee2e6;
+        }
+
+        .endpoint-section h2 {
+            color: #495057;
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .endpoint {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #dee2e6;
+        }
+
+        .endpoint h3 {
+            color: #343a40;
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+        }
+
+        .method-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-right: 8px;
+            color: white;
+        }
+
+        .method-get {
+            background: #28a745;
+        }
+
+        .method-post {
+            background: #007bff;
+        }
+
+        .endpoint-path {
+            font-family: 'Courier New', monospace;
+            color: #6c757d;
+            font-size: 0.9rem;
+            margin-bottom: 15px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            font-family: inherit;
+        }
+
+        .form-group textarea {
+            font-family: 'Courier New', monospace;
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .form-group small {
+            display: block;
+            color: #6c757d;
+            margin-top: 5px;
+            font-size: 0.85rem;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: 100%;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .response-section {
+            grid-column: 1 / -1;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid #dee2e6;
+        }
+
+        .response-section h2 {
+            color: #495057;
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+        }
+
+        .response-box {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            overflow-x: auto;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .response-box pre {
+            margin: 0;
+        }
+
+        .status-success {
+            color: #4ade80;
+            font-weight: 700;
+        }
+
+        .status-error {
+            color: #f87171;
+            font-weight: 700;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+            cursor: pointer;
+        }
+
+        .checkbox-group label {
+            margin: 0;
+            cursor: pointer;
+        }
+
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #007bff;
+            padding: 12px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            color: #004085;
+        }
+
+        .example-data {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 12px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            color: #856404;
+        }
+
+        .example-data strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎫 Defect Ticket API Tester</h1>
+            <p>Human-in-the-Loop (HITL) Approval Workflow Testing Interface</p>
+        </header>
+
+        <div class="config-section">
+            <label for="baseUrl">Base URL:</label>
+            <input type="text" id="baseUrl" value="http://localhost:8060" placeholder="http://localhost:8060">
+        </div>
+
+        <div class="main-content">
+            <!-- APPROVAL ENDPOINTS -->
+            <div class="endpoint-section">
+                <h2>📋 Approval Endpoints</h2>
+
+                <!-- List Pending Approvals -->
+                <div class="endpoint">
+                    <h3>
+                        <span class="method-badge method-get">GET</span>
+                        List Pending Approvals
+                    </h3>
+                    <div class="endpoint-path">/api/v1/approvals/pending</div>
+                    
+                    <div class="info-box">
+                        Returns all approval requests awaiting human review. Used by HITL dashboard.
+                    </div>
+
+                    <button onclick="listPendingApprovals()">Execute Request</button>
+                </div>
+
+                <!-- Submit Approval Decision -->
+                <div class="endpoint">
+                    <h3>
+                        <span class="method-badge method-post">POST</span>
+                        Submit Approval Decision
+                    </h3>
+                    <div class="endpoint-path">/api/v1/approvals/decide</div>
+
+                    <div class="info-box">
+                        Submit human approval decision. Triggers Step Functions workflow resumption.
+                    </div>
+
+                    <div class="form-group">
+                        <label for="approvalId">Approval ID *</label>
+                        <input type="text" id="approvalId" placeholder="approval-12345678-abcd-1234-efgh-123456789012">
+                        <small>Unique identifier from pending approvals list</small>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="approved" checked>
+                            <label for="approved">Approved (uncheck to reject)</label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="reviewerEmail">Reviewer Email *</label>
+                        <input type="email" id="reviewerEmail" placeholder="reviewer@example.com">
+                        <small>Email address of the human reviewer</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="comments">Comments</label>
+                        <textarea id="comments" placeholder="Optional reviewer comments explaining the decision"></textarea>
+                    </div>
+
+                    <div class="example-data">
+                        <strong>Example Approval ID:</strong>
+                        approval-12345678-abcd-1234-efgh-123456789012
+                    </div>
+
+                    <button onclick="submitApprovalDecision()">Submit Decision</button>
+                </div>
+            </div>
+
+            <!-- BATCH ENDPOINTS -->
+            <div class="endpoint-section">
+                <h2>📊 Batch Endpoints</h2>
+
+                <!-- Ingest Batch -->
+                <div class="endpoint">
+                    <h3>
+                        <span class="method-badge method-post">POST</span>
+                        Ingest Batch (SQS)
+                    </h3>
+                    <div class="endpoint-path">/api/v1/batch-ingestion/ingest</div>
+
+                    <div class="info-box">
+                        Submit a batch of tickets for processing. Stores in DynamoDB and sends to SQS queue.
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ingestBatchId">Batch ID *</label>
+                        <input type="text" id="ingestBatchId" placeholder="batch-2026-02-10-001">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="sourceSystem">Source System *</label>
+                        <select id="sourceSystem">
+                            <option value="JIRA">JIRA</option>
+                            <option value="ServiceNow">ServiceNow</option>
+                            <option value="GitHub">GitHub</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ticketsJson">Tickets JSON *</label>
+                        <textarea id="ticketsJson" style="min-height: 180px;" placeholder='[
+  {
+    "sourceReference": "JIRA-1234",
+    "title": "Critical bug",
+    "description": "Application crashes on login"
+  }
+]'></textarea>
+                        <small>Array of ticket objects with sourceReference, title, description</small>
+                    </div>
+
+                    <div class="example-data">
+                        <strong>Click to use example:</strong><br>
+                        <button onclick="fillExampleTickets()" style="width: auto; padding: 8px 16px; margin-top: 5px;">Fill Example Tickets</button>
+                    </div>
+
+                    <button onclick="ingestBatch()">Ingest Batch</button>
+                </div>
+
+                <!-- Get Batch Progress -->
+                <div class="endpoint">
+                    <h3>
+                        <span class="method-badge method-get">GET</span>
+                        Get Batch Progress
+                    </h3>
+                    <div class="endpoint-path">/api/v1/batches/{batchId}/progress</div>
+
+                    <div class="info-box">
+                        Retrieve real-time progress for a defect ticket batch. Shows processing status.
+                    </div>
+
+                    <div class="form-group">
+                        <label for="batchId">Batch ID *</label>
+                        <input type="text" id="batchId" placeholder="batch-001">
+                        <small>Unique identifier for the batch</small>
+                    </div>
+
+                    <div class="example-data">
+                        <strong>Example Batch IDs:</strong>
+                        batch-001, batch-2024-02-10-001
+                    </div>
+
+                    <button onclick="getBatchProgress()">Get Progress</button>
+                </div>
+
+                <!-- Classify Ticket -->
+                <div class="endpoint">
+                    <h3>
+                        <span class="method-badge method-post">POST</span>
+                        Classify Single Ticket (AI + Rules)
+                    </h3>
+                    <div class="endpoint-path">/api/v1/classification/{ticketId}</div>
+
+                    <div class="info-box">
+                        <strong>🎭 Uses MOCK AI in Local Mode</strong><br>
+                        Classifies a ticket using AI (mock in local, real Bedrock in AWS) + deterministic rules.
+                    </div>
+
+                    <div class="form-group">
+                        <label for="classifyTicketId">Ticket ID *</label>
+                        <input type="text" id="classifyTicketId" placeholder="ticket-test-001">
+                        <small>ID of the ticket to classify (must exist in DynamoDB)</small>
+                    </div>
+
+                    <div class="example-data">
+                        <strong>How it works locally:</strong><br>
+                        • Uses keyword-based MOCK classifier (no real AI)<br>
+                        • Combines with deterministic rules<br>
+                        • Updates ticket status to CLASSIFIED
+                    </div>
+
+                    <button onclick="classifyTicket()">Classify Ticket</button>
+                </div>
+
+                <!-- Classify Batch -->
+                <div class="endpoint">
+                    <h3>
+                        <span class="method-badge method-post">POST</span>
+                        Classify Batch (All Tickets)
+                    </h3>
+                    <div class="endpoint-path">/api/v1/classification/batch/{batchId}</div>
+
+                    <div class="info-box">
+                        <strong>🎯 Process Entire Batch</strong><br>
+                        Classifies ALL NEW tickets in a batch and creates approval requests where needed. Simulates full Step Functions workflow locally.
+                    </div>
+
+                    <div class="form-group">
+                        <label for="classifyBatchId">Batch ID *</label>
+                        <input type="text" id="classifyBatchId" placeholder="batch-20260211-110946">
+                        <small>ID of the batch to classify (must exist in DynamoDB)</small>
+                    </div>
+
+                    <div class="example-data">
+                        <strong>What it does:</strong><br>
+                        • Finds all NEW tickets in the batch<br>
+                        • Classifies each ticket (AI + Rules)<br>
+                        • Creates approval requests if needed<br>
+                        • Returns summary with counts
+                    </div>
+
+                    <button onclick="classifyBatch()">Classify Batch</button>
+                </div>
+
+                <!-- Seed Test Data -->
+                <div class="endpoint">
+                    <h3>
+                        <span class="method-badge method-post">POST</span>
+                        Seed Test Data
+                    </h3>
+                    <div class="endpoint-path">/api/v1/test/seed</div>
+
+                    <div class="info-box">
+                        <strong>🧪 Local Development Only</strong><br>
+                        Creates sample test data including tickets and approval requests. Only available in 'local' profile.
+                    </div>
+
+                    <div class="example-data">
+                        <strong>Creates:</strong><br>
+                        • 2 test tickets (ticket-test-001, ticket-test-002)<br>
+                        • 2 pending approvals ready for testing<br>
+                        • 1 batch (batch-test-001)
+                    </div>
+
+                    <button onclick="seedTestData()">Seed Test Data</button>
+                </div>
+            </div>
+
+            <!-- RESPONSE SECTION -->
+            <div class="response-section">
+                <h2>📤 Response</h2>
+                <div class="response-box" id="responseBox">
+                    <pre>Response will appear here after executing a request...</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Helper function to get base URL
+        function getBaseUrl() {
+            return document.getElementById('baseUrl').value.trim();
+        }
+
+        // Helper function to display response
+        function displayResponse(method, url, status, data, error = false) {
+            const responseBox = document.getElementById('responseBox');
+            const timestamp = new Date().toISOString();
+            const statusClass = error ? 'status-error' : 'status-success';
+            
+            let response = `<span class="${statusClass}">${method} ${url}</span>\n`;
+            response += `Timestamp: ${timestamp}\n`;
+            response += `Status: <span class="${statusClass}">${status}</span>\n\n`;
+            
+            if (data) {
+                response += `Response Data:\n${JSON.stringify(data, null, 2)}`;
+            }
+            
+            responseBox.innerHTML = `<pre>${response}</pre>`;
+        }
+
+        // Helper function to handle errors
+        function handleError(method, url, error) {
+            let errorMessage = 'Unknown error occurred';
+            let status = 'ERROR';
+            
+            if (error.message) {
+                errorMessage = error.message;
+            }
+            
+            displayResponse(method, url, status, { error: errorMessage }, true);
+        }
+
+        // List Pending Approvals
+        async function listPendingApprovals() {
+            const url = `${getBaseUrl()}/api/v1/approvals/pending`;
+            
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                displayResponse('GET', url, `${response.status} ${response.statusText}`, data, !response.ok);
+            } catch (error) {
+                handleError('GET', url, error);
+            }
+        }
+
+        // Submit Approval Decision
+        async function submitApprovalDecision() {
+            const approvalId = document.getElementById('approvalId').value.trim();
+            const approved = document.getElementById('approved').checked;
+            const reviewerEmail = document.getElementById('reviewerEmail').value.trim();
+            const comments = document.getElementById('comments').value.trim();
+            
+            // Validation
+            if (!approvalId) {
+                alert('Please enter an Approval ID');
+                return;
+            }
+            
+            if (!reviewerEmail) {
+                alert('Please enter a Reviewer Email');
+                return;
+            }
+            
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(reviewerEmail)) {
+                alert('Please enter a valid email address');
+                return;
+            }
+            
+            const requestBody = {
+                approvalId,
+                approved,
+                reviewerEmail,
+                comments: comments || undefined
+            };
+            
+            const url = `${getBaseUrl()}/api/v1/approvals/decide`;
+            
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+                
+                let data = null;
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    data = await response.json();
+                } else {
+                    data = { message: 'Decision submitted successfully' };
+                }
+                
+                displayResponse('POST', url, `${response.status} ${response.statusText}`, data, !response.ok);
+            } catch (error) {
+                handleError('POST', url, error);
+            }
+        }
+
+        // Get Batch Progress
+        async function getBatchProgress() {
+            const batchId = document.getElementById('batchId').value.trim();
+            
+            if (!batchId) {
+                alert('Please enter a Batch ID');
+                return;
+            }
+            
+            const url = `${getBaseUrl()}/api/v1/batches/${encodeURIComponent(batchId)}/progress`;
+            
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                displayResponse('GET', url, `${response.status} ${response.statusText}`, data, !response.ok);
+            } catch (error) {
+                handleError('GET', url, error);
+            }
+        }
+
+        // Seed Test Data
+        async function seedTestData() {
+            const url = `${getBaseUrl()}/api/v1/test/seed`;
+            
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                displayResponse('POST', url, `${response.status} ${response.statusText}`, data, !response.ok);
+                
+                // Auto-populate fields with created test data if successful
+                if (response.ok && data.approvals && data.approvals.length > 0) {
+                    document.getElementById('approvalId').value = data.approvals[0];
+                    document.getElementById('batchId').value = data.batchId;
+                    
+                    alert('Test data created successfully! Form fields have been populated with test IDs.');
+                }
+            } catch (error) {
+                handleError('POST', url, error);
+            }
+        }
+
+        // Ingest Batch
+        async function ingestBatch() {
+            const batchId = document.getElementById('ingestBatchId').value.trim();
+            const sourceSystem = document.getElementById('sourceSystem').value;
+            const ticketsJson = document.getElementById('ticketsJson').value.trim();
+            
+            // Validation
+            if (!batchId) {
+                alert('Please enter a Batch ID');
+                return;
+            }
+            
+            if (!ticketsJson) {
+                alert('Please enter tickets JSON');
+                return;
+            }
+            
+            let tickets;
+            try {
+                tickets = JSON.parse(ticketsJson);
+                if (!Array.isArray(tickets)) {
+                    throw new Error('Tickets must be an array');
+                }
+                if (tickets.length === 0) {
+                    throw new Error('At least one ticket is required');
+                }
+            } catch (e) {
+                alert('Invalid JSON format: ' + e.message);
+                return;
+            }
+            
+            const requestBody = {
+                batchId,
+                sourceSystem,
+                tickets
+            };
+            
+            const url = `${getBaseUrl()}/api/v1/batch-ingestion/ingest`;
+            
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+                
+                const data = await response.json();
+                displayResponse('POST', url, `${response.status} ${response.statusText}`, data, !response.ok);
+                
+                // Auto-populate batch ID field if successful
+                if (response.ok) {
+                    document.getElementById('batchId').value = batchId;
+                    alert(`Batch ingested successfully! ${data.ticketsIngested} tickets queued for processing.`);
+                }
+            } catch (error) {
+                handleError('POST', url, error);
+            }
+        }
+
+        // Classify Ticket
+        async function classifyTicket() {
+            const ticketId = document.getElementById('classifyTicketId').value.trim();
+            
+            if (!ticketId) {
+                alert('Please enter a Ticket ID');
+                return;
+            }
+            
+            const url = `${getBaseUrl()}/api/v1/classification/${encodeURIComponent(ticketId)}`;
+            
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                displayResponse('POST', url, `${response.status} ${response.statusText}`, data, !response.ok);
+                
+                if (response.ok) {
+                    alert('Ticket classified successfully! Check the response for classification details.');
+                }
+            } catch (error) {
+                handleError('POST', url, error);
+            }
+        }
+
+        // Classify Batch
+        async function classifyBatch() {
+            const batchId = document.getElementById('classifyBatchId').value.trim();
+            
+            if (!batchId) {
+                alert('Please enter a Batch ID');
+                return;
+            }
+            
+            const url = `${getBaseUrl()}/api/v1/classification/batch/${encodeURIComponent(batchId)}`;
+            
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                displayResponse('POST', url, `${response.status} ${response.statusText}`, data, !response.ok);
+                
+                if (response.ok) {
+                    alert(`Batch classified successfully!\n\n` +
+                          `Total: ${data.totalTickets}\n` +
+                          `Classified: ${data.classified}\n` +
+                          `Approvals Created: ${data.approvalsCreated}\n` +
+                          `Failed: ${data.failed}`);
+                }
+            } catch (error) {
+                handleError('POST', url, error);
+            }
+        }
+
+        // Fill Example Tickets
+        function fillExampleTickets() {
+            const exampleTickets = [
+                {
+                    sourceReference: "JIRA-1234",
+                    title: "Critical login bug causing application crash",
+                    description: "Users are unable to login. Application crashes immediately when attempting authentication. This affects all users across production environment. Error logs show NullPointerException in auth module."
+                },
+                {
+                    sourceReference: "JIRA-1235",
+                    title: "Security vulnerability in password reset flow",
+                    description: "Potential security issue detected in password reset functionality. Users can reset passwords without proper email verification. Urgent fix required."
+                },
+                {
+                    sourceReference: "JIRA-1236",
+                    title: "UI button alignment issue on dashboard",
+                    description: "Submit button on the user dashboard is slightly misaligned on mobile devices. Cosmetic issue that doesn't affect functionality."
+                }
+            ];
+            
+            document.getElementById('ticketsJson').value = JSON.stringify(exampleTickets, null, 2);
+            document.getElementById('ingestBatchId').value = 'batch-' + new Date().toISOString().split('T')[0] + '-001';
+        }
+
+        // Add keyboard shortcuts
+        document.addEventListener('keydown', function(event) {
+            // Ctrl/Cmd + Enter to submit forms
+            if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                const activeElement = document.activeElement;
+                const parentEndpoint = activeElement.closest('.endpoint');
+                if (parentEndpoint) {
+                    const button = parentEndpoint.querySelector('button');
+                    if (button) {
+                        button.click();
+                    }
+                }
+            }
+        });
+
+        // Auto-focus first input on page load
+        window.addEventListener('load', function() {
+            console.log('Defect Ticket API Tester loaded');
+            console.log('Base URL:', getBaseUrl());
+        });
+    </script>
+</body>
+</html>

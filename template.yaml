@@ -1,0 +1,254 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Defect Ticket Processing System with HITL
+
+Globals:
+  Function:
+    Runtime: java21
+    MemorySize: 2048
+    Timeout: 60
+    SnapStart:
+      ApplyOn: PublishedVersions
+    Environment:
+      Variables:
+        SPRING_PROFILES_ACTIVE: aws
+        AWS_REGION: !Ref AWS::Region
+        TABLE_PREFIX: !Ref TablePrefix
+
+Parameters:
+  TablePrefix:
+    Type: String
+    Default: defect-tickets
+    Description: Prefix for DynamoDB table names
+
+Resources:
+  # SQS Queue for batch ingestion buffering
+  IngestionQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${TablePrefix}-ingestion
+      VisibilityTimeout: 300
+      MessageRetentionPeriod: 345600
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt IngestionDLQ.Arn
+        maxReceiveCount: 3
+
+  IngestionDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${TablePrefix}-ingestion-dlq
+      MessageRetentionPeriod: 1209600
+
+  # Lambda Functions with SnapStart
+  IngestBatchFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${TablePrefix}-ingestBatch
+      Handler: org.springframework.cloud.function.adapter.aws.FunctionInvoker::handleRequest
+      CodeUri: target/defect-ticket-processor-1.0.0-SNAPSHOT-aws.jar
+      AutoPublishAlias: live
+      Environment:
+        Variables:
+          SPRING_CLOUD_FUNCTION_DEFINITION: ingestBatch
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DefectTicketsTable
+
+  LoadBatchTicketsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${TablePrefix}-loadBatchTickets
+      Handler: org.springframework.cloud.function.adapter.aws.FunctionInvoker::handleRequest
+      CodeUri: target/defect-ticket-processor-1.0.0-SNAPSHOT-aws.jar
+      AutoPublishAlias: live
+      Environment:
+        Variables:
+          SPRING_CLOUD_FUNCTION_DEFINITION: loadBatchTickets
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref DefectTicketsTable
+
+  ClassifyTicketFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${TablePrefix}-classifyTicket
+      Handler: org.springframework.cloud.function.adapter.aws.FunctionInvoker::handleRequest
+      CodeUri: target/defect-ticket-processor-1.0.0-SNAPSHOT-aws.jar
+      AutoPublishAlias: live
+      ReservedConcurrentExecutions: 10
+      Environment:
+        Variables:
+          SPRING_CLOUD_FUNCTION_DEFINITION: classifyTicket
+          SPRING_PROFILES_ACTIVE: aws
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DefectTicketsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+                - bedrock:InvokeModelWithResponseStream
+              Resource: 
+                - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-sonnet-4-5-20251024-v1:0'
+                - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-*'
+
+  CreateApprovalRequestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${TablePrefix}-createApprovalRequest
+      Handler: org.springframework.cloud.function.adapter.aws.FunctionInvoker::handleRequest
+      CodeUri: target/defect-ticket-processor-1.0.0-SNAPSHOT-aws.jar
+      AutoPublishAlias: live
+      Environment:
+        Variables:
+          SPRING_CLOUD_FUNCTION_DEFINITION: createApprovalRequest
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ApprovalRequestsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref DefectTicketsTable
+
+  # DynamoDB Tables
+  DefectTicketsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${TablePrefix}-tickets
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: ticketId
+          AttributeType: S
+        - AttributeName: batchId
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ticketId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: batch-index
+          KeySchema:
+            - AttributeName: batchId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: status-index
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  ApprovalRequestsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${TablePrefix}-approvals
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: approvalId
+          AttributeType: S
+        - AttributeName: ticketId
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+      KeySchema:
+        - AttributeName: approvalId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: ticket-index
+          KeySchema:
+            - AttributeName: ticketId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: status-index
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  WorkflowStatesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${TablePrefix}-workflow-states
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: executionId
+          AttributeType: S
+        - AttributeName: batchId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: executionId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: batch-index
+          KeySchema:
+            - AttributeName: batchId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  # Step Functions State Machine
+  TicketWorkflowStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub ${TablePrefix}-TicketWorkflow
+      DefinitionUri: src/main/resources/aws/stepfunctions/ticket-workflow.asl.json
+      DefinitionSubstitutions:
+        AWS_REGION: !Ref AWS::Region
+        AWS_ACCOUNT_ID: !Ref AWS::AccountId
+      Role: !GetAtt StepFunctionsExecutionRole.Arn
+
+  # IAM Roles
+  StepFunctionsExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
+      Policies:
+        - PolicyName: InvokeLambdaFunctions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt LoadBatchTicketsFunction.Arn
+                  - !GetAtt ClassifyTicketFunction.Arn
+                  - !GetAtt CreateApprovalRequestFunction.Arn
+
+Outputs:
+  StateMachineArn:
+    Description: Step Functions State Machine ARN
+    Value: !Ref TicketWorkflowStateMachine
+    Export:
+      Name: !Sub ${TablePrefix}-StateMachineArn
+
+  IngestionQueueUrl:
+    Description: SQS Queue URL for batch ingestion
+    Value: !Ref IngestionQueue
+    Export:
+      Name: !Sub ${TablePrefix}-IngestionQueueUrl
+
+  DefectTicketsTableName:
+    Description: DynamoDB table for tickets
+    Value: !Ref DefectTicketsTable
+    Export:
+      Name: !Sub ${TablePrefix}-TicketsTable
+
+  ApprovalRequestsTableName:
+    Description: DynamoDB table for approvals
+    Value: !Ref ApprovalRequestsTable
+    Export:
+      Name: !Sub ${TablePrefix}-ApprovalsTable

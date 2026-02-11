@@ -1,0 +1,46 @@
+spring:
+  ai:
+    bedrock:
+      aws:
+        region: ${AWS_REGION:us-east-1}
+      anthropic:
+        chat:
+          enabled: true
+          model: anthropic.claude-sonnet-4-5-20251024-v1:0
+          options:
+            temperature: 0.3
+            max-tokens: 2048
+
+aws:
+  region: ${AWS_REGION:us-east-1}
+  dynamodb:
+    table-prefix: ${TABLE_PREFIX:defect-tickets}
+  sqs:
+    ingestion-queue-url: ${INGESTION_QUEUE_URL}
+  stepfunctions:
+    state-machine-arn: ${STATE_MACHINE_ARN}
+
+llm:
+  provider: bedrock
+  model-id: anthropic.claude-sonnet-4-5-20251024-v1:0
+  confidence-threshold: 0.85
+  max-retries: 3
+  max-concurrency: 10
+
+hitl:
+  approval:
+    timeout-hours: 24
+    escalation-enabled: true
+    track-divergence: true
+
+batch:
+  max-concurrency: 10
+  ttl-days: 90
+
+logging:
+  level:
+    com.client.defectticket: INFO
+    software.amazon.awssdk: WARN
+    org.springframework.ai: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

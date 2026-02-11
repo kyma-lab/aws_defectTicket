@@ -1,0 +1,19 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "defect-ticket-processor"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "TablePrefix=defect-tickets"
+confirm_changeset = false
+resolve_s3 = true
+s3_prefix = "defect-ticket-processor"
+
+[default.build.parameters]
+use_container = false
+
+[default.local_start_api.parameters]
+warm_containers = "EAGER"
+
+[default.local_start_lambda.parameters]
+warm_containers = "EAGER"

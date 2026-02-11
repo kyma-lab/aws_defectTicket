@@ -1,0 +1,143 @@
+{
+  "Comment": "Defect Ticket Processing Workflow with HITL Gates and Claim Check Pattern",
+  "StartAt": "LoadBatchTickets",
+  "States": {
+    "LoadBatchTickets": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:defect-tickets-loadBatchTickets",
+      "Comment": "Load ticket IDs from DynamoDB using batchId (Claim Check Pattern)",
+      "Parameters": {
+        "batchId.$": "$.batchId",
+        "sourceSystem.$": "$.sourceSystem"
+      },
+      "ResultPath": "$.ticketIds",
+      "Next": "ProcessTicketBatch",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "HandleBatchFailure"
+        }
+      ]
+    },
+    "ProcessTicketBatch": {
+      "Type": "Map",
+      "ItemsPath": "$.ticketIds",
+      "MaxConcurrency": 10,
+      "Comment": "Process tickets in parallel with controlled concurrency",
+      "Parameters": {
+        "ticketId.$": "$$.Map.Item.Value",
+        "batchId.$": "$.batchId"
+      },
+      "Iterator": {
+        "StartAt": "ClassifyTicket",
+        "States": {
+          "ClassifyTicket": {
+            "Type": "Task",
+            "Resource": "arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:defect-tickets-classifyTicket",
+            "Comment": "AI+Rules classification",
+            "Parameters": {
+              "ticketId.$": "$.ticketId"
+            },
+            "ResultPath": "$.classificationResult",
+            "Next": "CheckConfidenceThreshold",
+            "Retry": [
+              {
+                "ErrorEquals": ["LlmThrottlingException"],
+                "IntervalSeconds": 5,
+                "MaxAttempts": 5,
+                "BackoffRate": 2.0
+              },
+              {
+                "ErrorEquals": ["LlmServiceException"],
+                "IntervalSeconds": 2,
+                "MaxAttempts": 3,
+                "BackoffRate": 1.5
+              }
+            ],
+            "Catch": [
+              {
+                "ErrorEquals": ["ValidationException"],
+                "ResultPath": "$.error",
+                "Next": "HandleValidationError"
+              }
+            ]
+          },
+          "CheckConfidenceThreshold": {
+            "Type": "Choice",
+            "Comment": "Check if human approval required",
+            "Choices": [
+              {
+                "Variable": "$.classificationResult.classification.requiresHumanApproval",
+                "BooleanEquals": true,
+                "Next": "CreateClassificationApproval"
+              }
+            ],
+            "Default": "TicketProcessed"
+          },
+          "CreateClassificationApproval": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+            "Comment": "HITL Gate 1",
+            "Parameters": {
+              "FunctionName": "arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:defect-tickets-createApprovalRequest",
+              "Payload": {
+                "ticketId.$": "$.ticketId",
+                "gate": "CLASSIFICATION_REVIEW",
+                "taskToken.$": "$$.Task.Token"
+              }
+            },
+            "ResultPath": "$.approvalResult",
+            "TimeoutSeconds": 86400,
+            "Next": "CheckApprovalDecision",
+            "Catch": [
+              {
+                "ErrorEquals": ["States.Timeout"],
+                "ResultPath": "$.approvalTimeout",
+                "Next": "TicketProcessed"
+              }
+            ]
+          },
+          "CheckApprovalDecision": {
+            "Type": "Choice",
+            "Choices": [
+              {
+                "Variable": "$.approvalResult.decision",
+                "StringEquals": "APPROVED",
+                "Next": "TicketProcessed"
+              }
+            ],
+            "Default": "HandleRejection"
+          },
+          "HandleValidationError": {
+            "Type": "Pass",
+            "Result": {
+              "status": "VALIDATION_FAILED"
+            },
+            "End": true
+          },
+          "HandleRejection": {
+            "Type": "Pass",
+            "Result": {
+              "status": "REJECTED"
+            },
+            "End": true
+          },
+          "TicketProcessed": {
+            "Type": "Succeed"
+          }
+        }
+      },
+      "ResultPath": "$.processedTickets",
+      "Next": "CompleteBatch"
+    },
+    "CompleteBatch": {
+      "Type": "Succeed"
+    },
+    "HandleBatchFailure": {
+      "Type": "Fail",
+      "Cause": "Batch loading failed",
+      "Error": "BatchProcessingError"
+    }
+  }
+}

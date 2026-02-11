@@ -1,0 +1,285 @@
+###
+# Defect Ticket Processing System - API Test Collection
+# REST API for Human-in-the-Loop (HITL) defect ticket processing with AI classification
+#
+# LocalStack Setup:
+#   - Ensure LocalStack is running on port 4566
+#   - DynamoDB tables should be created (see README for setup)
+###
+
+### Variables
+@baseUrl = http://localhost:8060
+@apiVersion = v1
+
+###############################################################################
+# APPROVAL ENDPOINTS
+# Manage Human-in-the-Loop approval workflows
+###############################################################################
+
+### 1. List Pending Approvals
+# GET /api/v1/approvals/pending
+# Returns all approval requests awaiting human review
+# Use Case: HITL dashboard to display items requiring manual approval
+#
+# Response: Array of ApprovalRequestDto
+# - approvalId: Unique approval identifier
+# - ticketId: Associated defect ticket ID
+# - gate: CLASSIFICATION_REVIEW | FINAL_APPROVAL
+# - status: PENDING | APPROVED | REJECTED | TIMED_OUT | ESCALATED
+# - context: JSON context with ticket and classification data
+# - createdAt: Timestamp when approval was created
+# - expiresAt: Expiration timestamp (24 hours by default)
+# - aiRecommendation: AI's original classification recommendation
+
+GET {{baseUrl}}/api/{{apiVersion}}/approvals/pending
+Accept: application/json
+
+###
+
+### 2. Submit Approval Decision
+# POST /api/v1/approvals/decide
+# Submit human approval decision for a pending request
+# Use Case: HITL dashboard submitting reviewer decision
+#
+# Request Body: ApprovalDecisionDto
+# - approvalId: ID of the approval request to decide (required)
+# - approved: Boolean decision - true=approve, false=reject (required)
+# - reviewerEmail: Email of the human reviewer (required, validated)
+# - comments: Optional reviewer comments explaining the decision
+#
+# Behavior:
+# - Updates approval status in DynamoDB
+# - Resumes Step Functions workflow via callback
+# - Tracks AI vs Human divergence for ML feedback
+# - Returns 200 OK on success
+
+POST {{baseUrl}}/api/{{apiVersion}}/approvals/decide
+Content-Type: application/json
+Accept: application/json
+
+{
+  "approvalId": "approval-12345678-abcd-1234-efgh-123456789012",
+  "approved": true,
+  "reviewerEmail": "reviewer@example.com",
+  "comments": "Classification looks correct, approved for processing"
+}
+
+### Example: Reject with comments
+POST {{baseUrl}}/api/{{apiVersion}}/approvals/decide
+Content-Type: application/json
+Accept: application/json
+
+{
+  "approvalId": "approval-87654321-dcba-4321-hgfe-210987654321",
+  "approved": false,
+  "reviewerEmail": "senior.reviewer@example.com",
+  "comments": "Misclassified - should be CRITICAL severity, not LOW"
+}
+
+###############################################################################
+# BATCH ENDPOINTS
+# Track batch processing progress and submit new batches
+###############################################################################
+
+### 3. Ingest Batch
+# POST /api/v1/batches/ingest
+# Submit a batch of defect tickets for processing via SQS
+# Use Case: External system sending tickets for AI classification
+#
+# Request Body: BatchIngestionRequest
+# - batchId: Unique identifier for the batch (required)
+# - sourceSystem: Origin system (JIRA, ServiceNow, GitHub) (required)
+# - tickets: Array of ticket objects (required)
+#   - sourceReference: External ticket ID
+#   - title: Ticket title
+#   - description: Detailed description
+#
+# Behavior:
+# - Stores full ticket data in DynamoDB (Claim Check Pattern)
+# - Sends lightweight message to SQS queue
+# - SQS consumer triggers Step Functions workflow
+# - Returns 202 Accepted with SQS message ID
+
+POST {{baseUrl}}/api/{{apiVersion}}/batches/ingest
+Content-Type: application/json
+Accept: application/json
+
+{
+  "batchId": "batch-2026-02-10-001",
+  "sourceSystem": "JIRA",
+  "tickets": [
+    {
+      "sourceReference": "JIRA-1234",
+      "title": "Critical login bug causing application crash",
+      "description": "Users are unable to login. Application crashes immediately when attempting authentication. This affects all users across production environment. Error logs show NullPointerException in auth module."
+    },
+    {
+      "sourceReference": "JIRA-1235",
+      "title": "Security vulnerability in password reset flow",
+      "description": "Potential security issue detected in password reset functionality. Users can reset passwords without proper email verification. Urgent fix required."
+    },
+    {
+      "sourceReference": "JIRA-1236",
+      "title": "UI button alignment issue on dashboard",
+      "description": "Submit button on the user dashboard is slightly misaligned on mobile devices. Cosmetic issue that doesn't affect functionality but impacts user experience."
+    }
+  ]
+}
+
+###
+
+### 4. Get Batch Progress
+# GET /api/v1/batches/{batchId}/progress
+# Retrieve real-time progress for a defect ticket batch
+# Use Case: Dashboard displaying batch processing status
+#
+# Path Parameter:
+# - batchId: Unique identifier for the batch
+#
+# Response: BatchProgressDto
+# - batchId: The batch identifier
+# - totalTickets: Total number of tickets in batch
+# - processedTickets: Number of fully processed tickets
+# - pendingTickets: Number of tickets still in progress
+# - statusBreakdown: Map of status -> count (NEW, CLASSIFIED, ASSIGNED, etc.)
+# - progressPercentage: 0-100 percentage of completion
+
+GET {{baseUrl}}/api/{{apiVersion}}/batches/batch-001/progress
+Accept: application/json
+
+### Example: Check progress for different batch
+GET {{baseUrl}}/api/{{apiVersion}}/batches/batch-2024-02-10-001/progress
+Accept: application/json
+
+###############################################################################
+# DATA SETUP EXAMPLES (for testing)
+# These examples show how to manually insert test data into LocalStack DynamoDB
+# Execute these using AWS CLI or AWS SDK before testing the API
+###############################################################################
+
+### Example: Insert test approval request (AWS CLI command - not HTTP)
+# aws dynamodb put-item \
+#   --table-name defect-tickets-approvals \
+#   --item '{
+#     "approvalId": {"S": "approval-12345678-abcd-1234-efgh-123456789012"},
+#     "ticketId": {"S": "ticket-001"},
+#     "gate": {"S": "CLASSIFICATION_REVIEW"},
+#     "status": {"S": "PENDING"},
+#     "taskToken": {"S": "test-token-123"},
+#     "context": {"S": "{\"ticket\":{\"title\":\"Critical bug\",\"severity\":\"HIGH\"}}"},
+#     "aiRecommendation": {"S": "CRITICAL"},
+#     "createdAt": {"S": "2026-02-10T16:00:00Z"},
+#     "expiresAt": {"S": "2026-02-11T16:00:00Z"}
+#   }' \
+#   --endpoint-url http://localhost:4566 \
+#   --region us-east-1
+
+### Example: Insert test defect ticket (AWS CLI command - not HTTP)
+# aws dynamodb put-item \
+#   --table-name defect-tickets-tickets \
+#   --item '{
+#     "ticketId": {"S": "ticket-001"},
+#     "batchId": {"S": "batch-001"},
+#     "sourceSystem": {"S": "JIRA"},
+#     "title": {"S": "Application crashes on login"},
+#     "description": {"S": "Users unable to login, app crashes immediately"},
+#     "status": {"S": "NEW"},
+#     "createdAt": {"S": "2026-02-10T15:00:00Z"},
+#     "updatedAt": {"S": "2026-02-10T15:00:00Z"}
+#   }' \
+#   --endpoint-url http://localhost:4566 \
+#   --region us-east-1
+
+###############################################################################
+# ERROR HANDLING EXAMPLES
+# Test various error scenarios
+###############################################################################
+
+### Test: Invalid email format
+POST {{baseUrl}}/api/{{apiVersion}}/approvals/decide
+Content-Type: application/json
+Accept: application/json
+
+{
+  "approvalId": "approval-123",
+  "approved": true,
+  "reviewerEmail": "invalid-email",
+  "comments": "This should fail validation"
+}
+
+###
+
+### Test: Missing required fields
+POST {{baseUrl}}/api/{{apiVersion}}/approvals/decide
+Content-Type: application/json
+Accept: application/json
+
+{
+  "approved": true,
+  "comments": "Missing approvalId and reviewerEmail"
+}
+
+###
+
+### Test: Non-existent batch
+GET {{baseUrl}}/api/{{apiVersion}}/batches/non-existent-batch/progress
+Accept: application/json
+
+###
+
+### Test: Non-existent approval
+POST {{baseUrl}}/api/{{apiVersion}}/approvals/decide
+Content-Type: application/json
+Accept: application/json
+
+{
+  "approvalId": "non-existent-approval-id",
+  "approved": true,
+  "reviewerEmail": "test@example.com",
+  "comments": "This approval doesn't exist"
+}
+
+###############################################################################
+# HEALTH CHECK
+# Test basic connectivity
+###############################################################################
+
+### Test: Root endpoint (should return 404 - this is a REST API)
+GET {{baseUrl}}/
+Accept: application/json
+
+###
+
+###############################################################################
+# NOTES
+###############################################################################
+#
+# Environment Setup:
+# 1. LocalStack must be running: podman ps | grep localstack
+# 2. DynamoDB tables must exist:
+#    - defect-tickets-tickets
+#    - defect-tickets-approvals
+#    - defect-tickets-workflow-states
+# 3. Spring Boot application must be running on port 8060
+#
+# Approval Workflow:
+# 1. Step Functions creates approval request in DynamoDB
+# 2. API returns pending approvals to dashboard
+# 3. Human reviewer submits decision via POST /approvals/decide
+# 4. API updates approval status and resumes Step Functions
+# 5. Workflow continues based on approval decision
+#
+# Data Model:
+# - ApprovalGate: CLASSIFICATION_REVIEW (Gate 1) | FINAL_APPROVAL (Gate 2)
+# - ApprovalStatus: PENDING | APPROVED | REJECTED | TIMED_OUT | ESCALATED
+# - TicketStatus: NEW | CLASSIFIED | ASSIGNED | IN_PROGRESS | RESOLVED | CLOSED
+#
+# AI vs Human Divergence Tracking:
+# - When human decision differs from AI recommendation, it's tracked
+# - aiVsHumanDivergence flag set to true
+# - Used for ML model improvement and compliance reporting
+#
+###############################################################################
+
+###
+POST http://localhost:8060/api/v1/classification/batch/batch-20260211-110946
